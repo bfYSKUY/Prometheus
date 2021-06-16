@@ -18,19 +18,19 @@
 #include "command_to_mavros.h"
 #include "prometheus_control_utils.h"
 #include "message_utils.h"
+#include "control_common.h"
 #include "Position_Controller/pos_controller_cascade_PID.h"
 #include "Position_Controller/pos_controller_PID.h"
 #include "Position_Controller/pos_controller_UDE.h"
-#include "Position_Controller/pos_controller_Passivity.h"
 #include "Position_Controller/pos_controller_NE.h"
+#include "Position_Controller/pos_controller_Passivity.h"
 #include "Filter/LowPassFilter.h"
-
 #define NODE_NAME "pos_controller"
 
 using namespace std;
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>变量声明<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 float cur_time;                                             //程序运行时间
-int controller_number;                                      //所选择控制器编号
+string controller_type;                                      //控制器类型
 float Takeoff_height;                                       //默认起飞高度
 float Disarm_height;                                        //自动上锁高度
 float Land_speed;                                           //降落速度
@@ -39,6 +39,7 @@ Eigen::Vector2f geo_fence_x;
 Eigen::Vector2f geo_fence_y;
 Eigen::Vector2f geo_fence_z;
 
+Eigen::Vector3d Takeoff_position;                              // 起飞位置
 prometheus_msgs::DroneState _DroneState;                          //无人机状态量
 
 prometheus_msgs::ControlCommand Command_Now;                      //无人机当前执行命令
@@ -47,13 +48,20 @@ prometheus_msgs::ControlCommand Command_Last;                     //无人机上
 prometheus_msgs::ControlOutput _ControlOutput;
 prometheus_msgs::AttitudeReference _AttitudeReference;           //位置控制器输出，即姿态环参考量
 prometheus_msgs::Message message;
-prometheus_msgs::LogMessage LogMessage;
+prometheus_msgs::LogMessageControl LogMessage;
 
+//RVIZ显示：期望位置
 geometry_msgs::PoseStamped ref_pose_rviz;
 float dt = 0;
 
+float disturbance_a_xy,disturbance_b_xy;
+float disturbance_a_z,disturbance_b_z;
+float disturbance_T;
+float disturbance_start_time;
+float disturbance_end_time;
+
 ros::Publisher att_ref_pub;
-ros::Publisher ref_pose_pub;
+ros::Publisher rivz_ref_pose_pub;
 ros::Publisher message_pub;
 ros::Publisher log_message_pub;
 Eigen::Vector3d throttle_sp;
@@ -92,12 +100,14 @@ void station_command_cb(const prometheus_msgs::ControlCommand::ConstPtr& msg)
         Command_Now = Command_Last;
     }
 }
+
 void drone_state_cb(const prometheus_msgs::DroneState::ConstPtr& msg)
 {
     _DroneState = *msg;
 
     _DroneState.time_from_start = cur_time;
 }
+
 void timerCallback(const ros::TimerEvent& e)
 {
     pub_message(message_pub, prometheus_msgs::Message::NORMAL, NODE_NAME, "Program is running.");
@@ -125,19 +135,19 @@ int main(int argc, char **argv)
     att_ref_pub = nh.advertise<prometheus_msgs::AttitudeReference>("/prometheus/control/attitude_reference", 10);      
         
     //【发布】参考位姿 RVIZ显示用
-    ref_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/prometheus/control/ref_pose_rviz", 10);
+    rivz_ref_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/prometheus/control/ref_pose_rviz", 10);
 
     // 【发布】用于地面站显示的提示消息
     message_pub = nh.advertise<prometheus_msgs::Message>("/prometheus/message/main", 10);
 
     // 【发布】用于log的消息
-    log_message_pub = nh.advertise<prometheus_msgs::LogMessage>("/prometheus/topic_for_log", 10);
+    log_message_pub = nh.advertise<prometheus_msgs::LogMessageControl>("/prometheus/log/control", 10);
 
     // 10秒定时打印，以确保程序在正确运行
     ros::Timer timer = nh.createTimer(ros::Duration(10.0), timerCallback);
 
     // 参数读取
-    nh.param<int>("controller_number", controller_number, 0);
+    nh.param<string>("controller_type", controller_type, "default");
     nh.param<float>("Takeoff_height", Takeoff_height, 1.5);
     nh.param<float>("Disarm_height", Disarm_height, 0.15);
     nh.param<float>("Land_speed", Land_speed, 0.2);
@@ -148,6 +158,23 @@ int main(int argc, char **argv)
     nh.param<float>("geo_fence/y_max", geo_fence_y[1], 100.0);
     nh.param<float>("geo_fence/z_min", geo_fence_z[0], -100.0);
     nh.param<float>("geo_fence/z_max", geo_fence_z[1], 100.0);
+
+    nh.param<float>("disturbance_a_xy", disturbance_a_xy, 0.5);
+    nh.param<float>("disturbance_b_xy", disturbance_b_xy, 0.0);
+    nh.param<float>("disturbance_a_z", disturbance_a_z, 0.5);
+    nh.param<float>("disturbance_b_z", disturbance_b_z, 0.0);
+    nh.param<float>("disturbance_T", disturbance_T, 0.0);
+    nh.param<float>("disturbance_start_time", disturbance_start_time, 10.0);
+    nh.param<float>("disturbance_end_time", disturbance_end_time, -1.0);
+
+    LowPassFilter LPF_x;
+    LowPassFilter LPF_y;
+    LowPassFilter LPF_z;
+
+    LPF_x.set_Time_constant(disturbance_T);
+    LPF_y.set_Time_constant(disturbance_T);
+    LPF_z.set_Time_constant(disturbance_T);
+
 
     // 位置控制一般选取为50Hz，主要取决于位置状态的更新频率
     ros::Rate rate(50.0);
@@ -161,48 +188,29 @@ int main(int argc, char **argv)
     pos_controller_cascade_PID pos_controller_cascade_pid;
     // 可以设置自定义位置环控制算法
     pos_controller_PID pos_controller_pid;
-    pos_controller_UDE pos_controller_ude;
-    pos_controller_passivity pos_controller_ps;
-    pos_controller_NE pos_controller_ne;
+    pos_controller_passivity pos_controller_passivity;
+    pos_controller_UDE pos_controller_UDE;
+    pos_controller_NE pos_controller_NE;
 
     printf_param();
 
-    if(controller_number == 0)
+    if(controller_type == "default")
     {
         pos_controller_cascade_pid.printf_param();
         
-    }else if(controller_number == 1)
+    }else if(controller_type == "pid")
     {
         pos_controller_pid.printf_param();
-    }else if(controller_number == 2)
+    }else if(controller_type == "passivity")
     {
-        pos_controller_ude.printf_param();
-    }else if(controller_number == 3)
+        pos_controller_passivity.printf_param();
+    }else if(controller_type == "ude")
     {
-        pos_controller_ps.printf_param();
-    }else if(controller_number == 4)
+        pos_controller_UDE.printf_param();
+    }else if(controller_type == "ne")
     {
-        pos_controller_ne.printf_param();
+        pos_controller_NE.printf_param();
     }
-
-    // 先读取一些飞控的数据
-    for(int i=0;i<100;i++)
-    {
-        ros::spinOnce();
-        rate.sleep();
-    }
-
-    // Set the takeoff position
-    Eigen::Vector3d Takeoff_position;
-    Takeoff_position[0] = _DroneState.position[0];
-    Takeoff_position[1] = _DroneState.position[1];
-    Takeoff_position[2] = _DroneState.position[2];
-    // NE控制律需要设置起飞初始值
-    if(controller_number == 4)
-    {
-       pos_controller_ne.set_initial_pos(Takeoff_position);
-    }
-
 
     // 初始化命令-
     // 默认设置：Idle模式 电机怠速旋转 等待来自上层的控制指令
@@ -258,29 +266,45 @@ int main(int argc, char **argv)
                     _command_to_mavros.mode_cmd.request.custom_mode = "OFFBOARD";
                     _command_to_mavros.set_mode_client.call(_command_to_mavros.mode_cmd);
                     pub_message(message_pub, prometheus_msgs::Message::NORMAL, NODE_NAME, "Setting to OFFBOARD Mode...");
-                    // //执行回调函数
-                    // ros::spinOnce();
-                    // ros::Duration(0.5).sleep();
+                }else
+                {
+                    pub_message(message_pub, prometheus_msgs::Message::NORMAL, NODE_NAME, "The Drone is in OFFBOARD Mode already...");
                 }
+                
 
                 if(!_DroneState.armed)
                 {
                     _command_to_mavros.arm_cmd.request.value = true;
                     _command_to_mavros.arming_client.call(_command_to_mavros.arm_cmd);
                     pub_message(message_pub, prometheus_msgs::Message::NORMAL, NODE_NAME, "Arming...");
-                    // //执行回调函数
-                    // ros::spinOnce();
-                    // ros::Duration(0.5).sleep();
+                }else
+                {
+                    pub_message(message_pub, prometheus_msgs::Message::NORMAL, NODE_NAME, "The Drone is armd already...");
                 }
+                
             }
         
             break;
 
         // 【Takeoff】 从摆放初始位置原地起飞至指定高度，偏航角也保持当前角度
         case prometheus_msgs::ControlCommand::Takeoff:
+            
+            //当无人机在空中时若受到起飞指令，则发出警告并悬停
+            // if (_DroneState.landed == false)
+            // {
+            //     Command_Now.Mode = prometheus_msgs::ControlCommand::Hold;
+            //     pub_message(message_pub, prometheus_msgs::Message::WARN, NODE_NAME, "The drone is in the air!");
+            // }
 
-            if (Command_Last.Mode != prometheus_msgs::ControlCommand::Takeoff)
+            if (_DroneState.landed == true && Command_Last.Mode != prometheus_msgs::ControlCommand::Takeoff)
             {
+                pub_message(message_pub, prometheus_msgs::Message::NORMAL, NODE_NAME, "Takeoff to the desired point.");
+                // 设定起飞位置
+                Takeoff_position[0] = _DroneState.position[0];
+                Takeoff_position[1] = _DroneState.position[1];
+                Takeoff_position[2] = _DroneState.position[2];
+
+                //
                 Command_Now.Reference_State.Move_mode       = prometheus_msgs::PositionReference::XYZ_POS;
                 Command_Now.Reference_State.Move_frame      = prometheus_msgs::PositionReference::ENU_FRAME;
                 Command_Now.Reference_State.position_ref[0] = Takeoff_position[0];
@@ -321,7 +345,7 @@ int main(int argc, char **argv)
             //如果距离起飞高度小于10厘米，则直接切换为land模式；
             if(abs(_DroneState.position[2] - Takeoff_position[2]) < Disarm_height)
             {
-                if(_DroneState.mode == "OFFBOARD")
+                if(_DroneState.mode != "AUTO.LAND")
                 {
                     //此处切换会manual模式是因为:PX4默认在offboard模式且有控制的情况下没法上锁,直接使用飞控中的land模式
                     _command_to_mavros.mode_cmd.request.custom_mode = "AUTO.LAND";
@@ -382,7 +406,7 @@ int main(int argc, char **argv)
         if(Command_Now.Mode != prometheus_msgs::ControlCommand::Idle)
         {
             //选择控制器
-            if(controller_number == 0)
+            if(controller_type == "default")
             {
                 //轨迹追踪控制,直接改为PID控制器
                 if(Command_Now.Reference_State.Move_mode != prometheus_msgs::PositionReference::TRAJECTORY)
@@ -390,24 +414,50 @@ int main(int argc, char **argv)
                     _ControlOutput = pos_controller_cascade_pid.pos_controller(_DroneState, Command_Now.Reference_State, dt);
                 }else
                 {
-                    _ControlOutput = pos_controller_pid.pos_controller(_DroneState, Command_Now.Reference_State, dt);
+                    _ControlOutput = pos_controller_cascade_pid.pos_controller(_DroneState, Command_Now.Reference_State, dt);
+                    // _ControlOutput = pos_controller_pid.pos_controller(_DroneState, Command_Now.Reference_State, dt);
                     pub_message(message_pub, prometheus_msgs::Message::WARN, NODE_NAME, "CPID NOT SUPPOORT TRAJECTORY TRACKING.");
                 }
                 
-            }else if(controller_number == 1)
+            }else if(controller_type == "pid")
             {
                 _ControlOutput = pos_controller_pid.pos_controller(_DroneState, Command_Now.Reference_State, dt);
-            }else if(controller_number == 2)
+            }else if(controller_type == "passivity")
             {
-                _ControlOutput = pos_controller_ude.pos_controller(_DroneState, Command_Now.Reference_State, dt);
-            }else if(controller_number == 3)
+                _ControlOutput = pos_controller_passivity.pos_controller(_DroneState, Command_Now.Reference_State, dt);
+            }else if(controller_type == "ude")
             {
-                _ControlOutput = pos_controller_ps.pos_controller(_DroneState, Command_Now.Reference_State, dt);
-            }else if(controller_number == 4)
+                _ControlOutput = pos_controller_UDE.pos_controller(_DroneState, Command_Now.Reference_State, dt);
+            }else if(controller_type == "ne")
             {
-                _ControlOutput = pos_controller_ne.pos_controller(_DroneState, Command_Now.Reference_State, dt);
+                _ControlOutput = pos_controller_NE.pos_controller(_DroneState, Command_Now.Reference_State, dt);
             }
-            
+
+
+            if(Command_Now.Reference_State.Move_mode == prometheus_msgs::PositionReference::TRAJECTORY)
+            {
+                // 输入干扰
+                Eigen::Vector3d random;
+
+                // 先生成随机数
+                random[0] = prometheus_control_utils::random_num(disturbance_a_xy, disturbance_b_xy);
+                random[1] = prometheus_control_utils::random_num(disturbance_a_xy, disturbance_b_xy);
+                random[2] = prometheus_control_utils::random_num(disturbance_a_z, disturbance_b_z);
+
+                // 低通滤波
+                random[0] = LPF_x.apply(random[0], dt);
+                random[1] = LPF_y.apply(random[1], dt);
+                random[2] = LPF_z.apply(random[2], dt);
+
+                if(Command_Now.Reference_State.time_from_start>disturbance_start_time && Command_Now.Reference_State.time_from_start<disturbance_end_time)
+                {
+                    //应用输入干扰信号
+                    _ControlOutput.Throttle[0] = _ControlOutput.Throttle[0] + random[0];
+                    _ControlOutput.Throttle[1] = _ControlOutput.Throttle[1] + random[1];
+                    _ControlOutput.Throttle[2] = _ControlOutput.Throttle[2] + random[2];
+                }
+            }
+
         }
 
         throttle_sp[0] = _ControlOutput.Throttle[0];
@@ -424,14 +474,16 @@ int main(int argc, char **argv)
 
         //发布用于RVIZ显示的位姿
         ref_pose_rviz = get_ref_pose_rviz(Command_Now, _AttitudeReference);   
-        ref_pose_pub.publish(ref_pose_rviz);
+        rivz_ref_pose_pub.publish(ref_pose_rviz);
 
         //发布log消息，可用rosbag记录
+        LogMessage.control_type = 1;
         LogMessage.time = cur_time;
         LogMessage.Drone_State = _DroneState;
         LogMessage.Control_Command = Command_Now;
         LogMessage.Control_Output = _ControlOutput;
         LogMessage.Attitude_Reference = _AttitudeReference;
+        LogMessage.ref_pose = ref_pose_rviz;
         log_message_pub.publish(LogMessage);
 
         Command_Last = Command_Now;
@@ -444,7 +496,7 @@ int main(int argc, char **argv)
 void printf_param()
 {
     cout <<">>>>>>>>>>>>>>>>>>>>>>>> px4_pos_controller Parameter <<<<<<<<<<<<<<<<<<<<<<" <<endl;
-    cout << "controller_number: "<< controller_number <<endl;
+    cout << "controller_type: "<< controller_type <<endl;
     cout << "Takeoff_height   : "<< Takeoff_height<<" [m] "<<endl;
     cout << "Disarm_height    : "<< Disarm_height <<" [m] "<<endl;
     cout << "Land_speed       : "<< Land_speed <<" [m/s] "<<endl;
@@ -541,6 +593,7 @@ geometry_msgs::PoseStamped get_ref_pose_rviz(const prometheus_msgs::ControlComma
     geometry_msgs::PoseStamped ref_pose;
 
     ref_pose.header.stamp = ros::Time::now();
+    // world: 世界系,即gazebo坐标系,参见tf_transform.launch
     ref_pose.header.frame_id = "world";
 
     if(cmd.Mode == prometheus_msgs::ControlCommand::Idle)

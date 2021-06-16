@@ -50,10 +50,11 @@ class pos_controller_cascade_PID
             pos_cascade_pid_nh.param<float>("Pos_cascade_pid/Hover_throttle", Hover_throttle, 0.43);
             pos_cascade_pid_nh.param<float>("Pos_cascade_pid/MPC_VELD_LP", MPC_VELD_LP, 5.0);
 
-            pos_cascade_pid_nh.param<float>("Limit/XY_VEL_MAX", MPC_XY_VEL_MAX, 2.0);
+            pos_cascade_pid_nh.param<float>("Limit/XY_VEL_MAX", MPC_XY_VEL_MAX, 1.0);
             pos_cascade_pid_nh.param<float>("Limit/Z_VEL_MAX", MPC_Z_VEL_MAX, 0.5);
             pos_cascade_pid_nh.param<float>("Limit/THR_MIN", MPC_THR_MIN, 0.1);
             pos_cascade_pid_nh.param<float>("Limit/THR_MAX", MPC_THR_MAX, 0.9);
+            pos_cascade_pid_nh.param<float>("Limit/THR_INT_MAX", MPC_THR_INT_MAX, 0.2);
             pos_cascade_pid_nh.param<float>("Limit/tilt_max", tilt_max, 20.0);
 
             vel_setpoint    = Eigen::Vector3d(0.0,0.0,0.0);
@@ -86,6 +87,7 @@ class pos_controller_cascade_PID
         //Limitation of the thrust
         float MPC_THR_MIN;
         float MPC_THR_MAX;
+        float MPC_THR_INT_MAX;
 
         //Limitation of the tilt angle (roll and pitch)  [degree]
         float tilt_max;
@@ -191,6 +193,14 @@ void pos_controller_cascade_PID::_positionController
     {
         vel_setpoint[2] = _Reference_State.velocity_ref[2];
     }
+    
+    // Only for controller test
+    if(_Reference_State.Move_mode == prometheus_msgs::PositionReference::TRAJECTORY)
+    {
+        vel_setpoint[0] =  Kp_xy * (_Reference_State.position_ref[0] - _DroneState.position[0]);
+        vel_setpoint[1] =  Kp_xy * (_Reference_State.position_ref[1] - _DroneState.position[1]);
+        vel_setpoint[2] =  Kp_z  * (_Reference_State.position_ref[2] - _DroneState.position[2]);
+    }
 
     // Limit the velocity setpoint
     vel_setpoint[0] = constrain_function(vel_setpoint[0], MPC_XY_VEL_MAX);
@@ -251,8 +261,11 @@ void pos_controller_cascade_PID::_velocityController
             thurst_int[2] += Ki_vz  * error_vel[2] * delta_time;
 
             // limit thrust integral
-            thurst_int[2] = min(fabs(thurst_int[2]), MPC_THR_MAX ) * sign_function(thurst_int[2]);
-    }else{
+            thurst_int[2] = min(fabs(thurst_int[2]), MPC_THR_INT_MAX ) * sign_function(thurst_int[2]);
+    }else
+    {
+        //　发生Windup，则积分项清零
+        thurst_int[2] = 0;
         cout<<"Anti-Windup!"<<endl;
     }
 

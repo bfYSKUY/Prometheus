@@ -4,6 +4,8 @@ project(prometheus_detection)
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
 
+# set(OpenCV_DIR /usr/local/share/OpenCV)
+
 # Define path of darknet folder here.
 find_path(DARKNET_PATH
   NAMES "Makefile"
@@ -21,7 +23,6 @@ if (CUDA_FOUND)
     CUDA_NVCC_FLAGS
     ${CUDA_NVCC_FLAGS};
     -O3
-    -gencode arch=compute_30,code=sm_30
     -gencode arch=compute_35,code=sm_35
     -gencode arch=compute_50,code=[sm_50,compute_50]
     -gencode arch=compute_52,code=[sm_52,compute_52]
@@ -59,6 +60,7 @@ find_package(catkin REQUIRED COMPONENTS
     actionlib
     prometheus_msgs
     tf2_eigen
+    tf
 )
 
 ## System dependencies are found with CMake's conventions
@@ -66,7 +68,9 @@ find_package(Boost REQUIRED COMPONENTS
     thread
     date_time
 )
+
 find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # Enable OPENCV in darknet
 add_definitions(-DOPENCV)
@@ -171,6 +175,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${Boost_INUCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
   ../common/include
 )
 
@@ -349,11 +354,35 @@ add_executable(aruco_det
 )
 target_link_libraries(aruco_det ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} yaml-cpp)
 
+add_executable(aruco_det_v2
+    cpp_nodes/aruco_det_v2.cpp
+)
+target_link_libraries(aruco_det_v2 ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} yaml-cpp Eigen3::Eigen)
+
+add_executable(create_board_charuco
+    cpp_nodes/create_board_charuco.cpp
+)
+target_link_libraries(create_board_charuco ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(calibrate_camera_charuco
+    cpp_nodes/calibrate_camera_charuco.cpp
+)
+target_link_libraries(calibrate_camera_charuco ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
+
 add_executable(landpad_det
     cpp_nodes/landpad_det.cpp
 )
 target_link_libraries(landpad_det ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} yaml-cpp)
 
+add_executable(stereo_detection_saving_gazebo_samples
+    cpp_nodes/3d_detection_saving_gazebo_samples.cpp
+)
+target_link_libraries(stereo_detection_saving_gazebo_samples ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} yaml-cpp)
+
+add_executable(aruco_navigation_switch
+    cpp_nodes/aruco_navigation_switch.cpp
+)
+target_link_libraries(aruco_navigation_switch ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} yaml-cpp)
 
 if(CATKIN_ENABLE_TESTING)
   # Download yolov3-tiny.weights
@@ -362,7 +391,7 @@ if(CATKIN_ENABLE_TESTING)
   message(STATUS "Checking and downloading yolov3-tiny.weights if needed ...")
   if (NOT EXISTS "${FILE}")
     message(STATUS "... file does not exist. Downloading now ...")
-    execute_process(COMMAND wget http://121.36.68.10/upload/yolov3-tiny.weights -P ${PATH})
+    execute_process(COMMAND wget http://jario.ren/upload/yolov3-tiny.weights -P ${PATH})
   endif()
   # Download yolov3-tiny-BDT-best.weights
   set(PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/darknet_ros/yolo_network_config/weights")
@@ -370,7 +399,7 @@ if(CATKIN_ENABLE_TESTING)
   message(STATUS "Checking and downloading yolov3-tiny-BDT-best.weights if needed ...")
   if (NOT EXISTS "${FILE}")
     message(STATUS "... file does not exist. Downloading now ...")
-    execute_process(COMMAND wget http://121.36.68.10/upload/yolov3-tiny-BDT-best.weights -P ${PATH})
+    execute_process(COMMAND wget http://jario.ren/upload/yolov3-tiny-BDT-best.weights -P ${PATH})
   endif()
   # Download SiamRPNVOT.model
   set(PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/siam_rpn_lib")
@@ -378,7 +407,7 @@ if(CATKIN_ENABLE_TESTING)
   message(STATUS "Checking and downloading SiamRPNVOT.model if needed ...")
   if (NOT EXISTS "${FILE}")
     message(STATUS "... file does not exist. Downloading now ...")
-    execute_process(COMMAND wget http://121.36.68.10/upload/SiamRPNVOT.model -P ${PATH})
+    execute_process(COMMAND wget http://jario.ren/upload/SiamRPNVOT.model -P ${PATH})
   endif()
 endif()
 

@@ -33,6 +33,15 @@ image_transport::Publisher image_pub;
 //设置图像大小
 // cv::Size image_size = Size(1920.0, 1080.0);
 
+
+std::string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {
+    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
+           std::to_string(capture_height) + ", format=(string)NV12, framerate=(fraction)" + std::to_string(framerate) +
+           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
+           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+}
+
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "web_cam");
@@ -53,6 +62,16 @@ int main(int argc, char **argv)
         if (message_print)
             pub_message(message_pub, prometheus_msgs::Message::NORMAL, msg_node_name, 
             camera_id_msg);
+    }
+    int camera_type = 0; // 0: web_cam, 1: mipi_cam, 2: arducam
+    if (nh.getParam("camera_type", camera_type)) {
+        char camera_type_msg[256];
+        sprintf(camera_type_msg, "camera type is %d", camera_type);
+        if (local_print)
+            cout << camera_type_msg << endl;
+        if (message_print)
+            pub_message(message_pub, prometheus_msgs::Message::NORMAL, msg_node_name, 
+            camera_type_msg);
     }
     int camera_height(480), camera_width(640);
     int cam_h, cam_w;
@@ -76,21 +95,67 @@ int main(int argc, char **argv)
             pub_message(message_pub, prometheus_msgs::Message::NORMAL, msg_node_name, 
             camera_id_msg);
     }
+    int framerate = 30;
+    int rate;
+    if (nh.getParam("framerate", rate)) {
+        if (rate > 0) framerate = rate;
+        char framerate_msg[256];
+        sprintf(framerate_msg, "set framerate %d", framerate);
+        if (local_print)
+            cout << framerate_msg << endl;
+        if (message_print)
+            pub_message(message_pub, prometheus_msgs::Message::NORMAL, msg_node_name, 
+            framerate_msg);
+    }
+    int flip_method = 0;
+    int flip;
+    if (nh.getParam("flip_method", flip)) {
+        if (flip > 0) flip_method = flip;
+        char flip_method_msg[256];
+        sprintf(flip_method_msg, "set flip_method %d", flip_method);
+        if (local_print)
+            cout << flip_method_msg << endl;
+        if (message_print)
+            pub_message(message_pub, prometheus_msgs::Message::NORMAL, msg_node_name, 
+            flip_method_msg);
+    }
 
     int resize_h(0), resize_w(0);
     nh.getParam("resize_h", resize_h);
     nh.getParam("resize_w", resize_w);
+
+
+    std::string pipeline = gstreamer_pipeline(
+        cam_w,
+        cam_h,
+        resize_w,
+        resize_h,
+        framerate,
+        flip_method
+    );
+
 
     // 在这里修改发布话题名称
     image_pub = it.advertise("/prometheus/camera/rgb/image_raw", 1);
 
     // 用系统默认驱动读取摄像头0，使用其他摄像头ID，请在这里修改
     
-    cv::VideoCapture cap(camera_id);
-    // 设置摄像头分辨率
-    cap.set(CAP_PROP_FRAME_WIDTH, camera_width);
-    cap.set(CAP_PROP_FRAME_HEIGHT, camera_height);
-    cv::Mat frame;
+    cv::VideoCapture cap;
+
+    if (camera_type == 1) {
+        cap.open(pipeline, cv::CAP_GSTREAMER);
+    } else if (camera_type == 2) {
+        cap.open(camera_id, cv::CAP_V4L2);
+        cap.set(CAP_PROP_FOURCC, CV_FOURCC('G', 'R', 'E', 'Y'));
+        cap.set(CAP_PROP_CONVERT_RGB, 0);
+    } else {
+        cap.open(camera_id);
+        // 设置摄像头分辨率
+        cap.set(CAP_PROP_FRAME_WIDTH, camera_width);
+        cap.set(CAP_PROP_FRAME_HEIGHT, camera_height);
+    }
+
+    cv::Mat frame, frame_right;
     // 设置全屏
     // namedWindow("web_cam frame", CV_WINDOW_NORMAL);
     // setWindowProperty("web_cam frame", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
@@ -104,6 +169,14 @@ int main(int argc, char **argv)
         cap >> frame;
         if (resize_w > 0 && resize_h > 0) {
             cv::resize(frame, frame, cv::Size(resize_w, resize_h));
+        }
+        if (camera_type == 2) {
+            if (frame.cols > frame.rows * 2)
+            {
+                frame_right = frame.colRange(frame.cols / 2, frame.cols);
+                frame = frame.colRange(0, frame.cols / 2);
+            }
+            cv::cvtColor(frame, frame, cv::COLOR_GRAY2BGR);
         }
         if (!frame.empty())
         {

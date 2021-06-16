@@ -52,14 +52,40 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   include
+  autonomous_landing
   ${catkin_INCLUDE_DIRS}
   ../common/include
+  ../control/include
 )
 
 
 ###############################
 ##      声明可执行cpp文件     ##
 ###############################
+add_executable(gimbal_control_circle gimbal_control/gimbal_control_circle.cpp)
+add_dependencies(gimbal_control_circle prometheus_mission_gencpp)
+target_link_libraries(gimbal_control_circle ${catkin_LIBRARIES})
+
+add_executable(gimbal_control_demo gimbal_control/gimbal_control_demo.cpp)
+add_dependencies(gimbal_control_demo prometheus_mission_gencpp)
+target_link_libraries(gimbal_control_demo ${catkin_LIBRARIES})
+
+add_executable(gimbal_control gimbal_control/gimbal_control.cpp)
+add_dependencies(gimbal_control prometheus_mission_gencpp)
+target_link_libraries(gimbal_control ${catkin_LIBRARIES})
+
+add_executable(pad_tracking test/pad_tracking.cpp)
+add_dependencies(pad_tracking prometheus_mission_gencpp)
+target_link_libraries(pad_tracking ${catkin_LIBRARIES})
+
+add_executable(mission_cmd_pub test/mission_cmd_pub.cpp)
+add_dependencies(mission_cmd_pub prometheus_mission_gencpp)
+target_link_libraries(mission_cmd_pub ${catkin_LIBRARIES})
+
+add_executable(turtlebot_formation formation_flight/turtlebot_formation.cpp)
+add_dependencies(turtlebot_formation prometheus_mission_gencpp)
+target_link_libraries(turtlebot_formation ${catkin_LIBRARIES})
+
 add_executable(circle_crossing circle_crossing/circle_crossing.cpp)
 add_dependencies(circle_crossing prometheus_mission_gencpp)
 target_link_libraries(circle_crossing ${catkin_LIBRARIES})
@@ -68,9 +94,9 @@ add_executable(number_detection number_detection/number_detection.cpp)
 add_dependencies(number_detection prometheus_mission_gencpp)
 target_link_libraries(number_detection ${catkin_LIBRARIES})
 
-add_executable(formation_flight formation_flight/formation_flight.cpp)
-add_dependencies(formation_flight prometheus_mission_gencpp)
-target_link_libraries(formation_flight ${catkin_LIBRARIES})
+add_executable(turtlebot_follow formation_flight/turtlebot_follow.cpp)
+add_dependencies(turtlebot_follow prometheus_mission_gencpp)
+target_link_libraries(turtlebot_follow ${catkin_LIBRARIES})
 
 add_executable(color_line_following color_line_following/color_line_following.cpp)
 add_dependencies(color_line_following prometheus_mission_gencpp)
@@ -80,13 +106,13 @@ add_executable(planning_mission planning_mission/planning_mission.cpp)
 add_dependencies(planning_mission prometheus_mission_gencpp)
 target_link_libraries(planning_mission ${catkin_LIBRARIES})
 
-add_executable(planning_mission_astar planning_mission/planning_mission_astar.cpp)
-add_dependencies(planning_mission_astar prometheus_mission_gencpp)
-target_link_libraries(planning_mission_astar ${catkin_LIBRARIES})
-
 add_executable(pub_goal planning_mission/pub_goal.cpp)
 add_dependencies(pub_goal prometheus_mission_gencpp)
 target_link_libraries(pub_goal ${catkin_LIBRARIES})
+
+add_executable(pub_goal_swarm planning_mission/pub_goal_swarm.cpp)
+add_dependencies(pub_goal_swarm prometheus_mission_gencpp)
+target_link_libraries(pub_goal_swarm ${catkin_LIBRARIES})
 
 add_executable(waypoint_tracking waypoint_tracking/waypoint_tracking.cpp)
 add_dependencies(waypoint_tracking prometheus_mission_gencpp)
@@ -95,6 +121,10 @@ target_link_libraries(waypoint_tracking ${catkin_LIBRARIES})
 add_executable(autonomous_landing autonomous_landing/autonomous_landing.cpp)
 add_dependencies(autonomous_landing prometheus_mission_gencpp)
 target_link_libraries(autonomous_landing ${catkin_LIBRARIES})
+
+add_executable(autonomous_landing_aruco autonomous_landing/autonomous_landing_aruco.cpp)
+add_dependencies(autonomous_landing_aruco prometheus_mission_gencpp)
+target_link_libraries(autonomous_landing_aruco ${catkin_LIBRARIES})
 
 add_executable(object_tracking object_tracking/object_tracking.cpp)
 add_dependencies(object_tracking prometheus_mission_gencpp)
@@ -108,6 +138,37 @@ add_executable(fake_detectioninfo test/fake_detectioninfo.cpp)
 add_dependencies(fake_detectioninfo prometheus_mission_gencpp)
 target_link_libraries(fake_detectioninfo ${catkin_LIBRARIES})
 
+add_executable(formation_getpose formation/formation_getpose.cpp)
+add_dependencies(formation_getpose prometheus_mission_gencpp)
+target_link_libraries(formation_getpose ${catkin_LIBRARIES})
+
+add_executable(formation_state formation/formation_state.cpp)
+add_dependencies(formation_state prometheus_mission_gencpp)
+target_link_libraries(formation_state ${catkin_LIBRARIES})
+
+add_executable(formation_move formation/formation_move.cpp)
+add_dependencies(formation_move prometheus_mission_gencpp)
+target_link_libraries(formation_move ${catkin_LIBRARIES})
+
+add_executable(formation_change formation/formation_change.cpp)
+add_dependencies(formation_change prometheus_mission_gencpp)
+target_link_libraries(formation_change ${catkin_LIBRARIES})
+
+add_executable(formation_setmode formation/formation_setmode.cpp)
+add_dependencies(formation_setmode prometheus_mission_gencpp)
+target_link_libraries(formation_setmode ${catkin_LIBRARIES})
+
+add_executable(formation_control formation/formation_control.cpp)
+add_dependencies(formation_control prometheus_mission_gencpp)
+target_link_libraries(formation_control ${catkin_LIBRARIES})
+
+add_executable(formation_square formation/formation_square.cpp)
+add_dependencies(formation_square prometheus_mission_gencpp)
+target_link_libraries(formation_square ${catkin_LIBRARIES})
+
+add_executable(pub_goal_from_qgc planning_mission/pub_goal_from_qgc.cpp)
+add_dependencies(pub_goal_from_qgc prometheus_mission_gencpp)
+target_link_libraries(pub_goal_from_qgc ${catkin_LIBRARIES})
 
 #############
 ## Install ##

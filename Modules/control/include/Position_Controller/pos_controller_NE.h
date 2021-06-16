@@ -3,7 +3,7 @@
 *
 * Author: Qyp
 *
-* Update Time: 2019.5.1
+* Update Time: 2021.3.5
 *
 * Introduction:  Position Controller using NE+UDE method
 ***************************************************************************************************************************/
@@ -20,11 +20,10 @@
 #include <Filter/HighPassFilter.h>
 #include <Filter/LeadLagFilter.h>
 
-
-#include <prometheus_msgs/ControlOutput.h>
 #include <prometheus_msgs/DroneState.h>
 #include <prometheus_msgs/PositionReference.h>
 #include <prometheus_msgs/AttitudeReference.h>
+#include <prometheus_msgs/ControlOutput.h>
 
 
 using namespace std;
@@ -38,7 +37,7 @@ class pos_controller_NE
         pos_controller_NE(void):
             pos_NE_nh("~")
         {
-            pos_NE_nh.param<float>("/Quad/mass", Quad_MASS, 1.0);
+            pos_NE_nh.param<float>("Quad/mass", Quad_MASS, 1.0);
 
             pos_NE_nh.param<float>("Pos_ne/Kp_xy", Kp[0], 1.0);
             pos_NE_nh.param<float>("Pos_ne/Kp_xy", Kp[1], 1.0);

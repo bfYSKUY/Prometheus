@@ -14,11 +14,13 @@
 #include <command_to_mavros.h>
 #include <prometheus_msgs/Message.h>
 #include <prometheus_msgs/ControlCommand.h>
+#include <prometheus_msgs/SwarmCommand.h>
 #include <prometheus_msgs/DroneState.h>
 #include <prometheus_msgs/PositionReference.h>
 #include <prometheus_msgs/AttitudeReference.h>
 #include <prometheus_msgs/ControlOutput.h>
 #include <prometheus_msgs/LogMessage.h>
+#include <prometheus_msgs/LogMessageControl.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 
@@ -134,6 +136,7 @@ void printf_command_control(const prometheus_msgs::ControlCommand& _ControlComma
 }
 
 
+
 // 打印无人机状态
 void prinft_drone_state(const prometheus_msgs::DroneState& _Drone_state)
 {
@@ -165,21 +168,21 @@ void prinft_drone_state(const prometheus_msgs::DroneState& _Drone_state)
     //是否上锁
     if (_Drone_state.armed == true)
     {
-        cout << "  [ Armed ] ";
+        cout << " [ Armed ]";
     }
     else
     {
-        cout << "  [ DisArmed ] ";
+        cout << " [ DisArmed ]";
     }
 
     //是否在地面
     if (_Drone_state.landed == true)
     {
-        cout << "  [ Ground ] ";
+        cout << " [ Ground ] ";
     }
     else
     {
-        cout << "  [ Air ] ";
+        cout << " [ Air ] ";
     }
 
     cout << "[ " << _Drone_state.mode<<" ] " <<endl;
@@ -232,7 +235,7 @@ void prinft_ref_pose(const geometry_msgs::PoseStamped& ref_pose)
 float get_time_in_sec(const ros::Time& begin_time)
 {
     ros::Time time_now = ros::Time::now();
-    float currTimeSec = time_now.sec-begin_time.sec;
+    float currTimeSec = time_now.sec - begin_time.sec;
     float currTimenSec = time_now.nsec / 1e9 - begin_time.nsec / 1e9;
     return (currTimeSec + currTimenSec);
 }

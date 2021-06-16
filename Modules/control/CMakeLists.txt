@@ -69,7 +69,7 @@ add_library(KeyboardEvent src/lib/KeyboardEvent.cpp)
 
 ###### Main File ##########
 ##rover_pos_controller.cpp
-add_executable(rover_pos_controller src/rover_pos_controller.cpp)
+add_executable(rover_pos_controller src/rover_control/rover_pos_controller.cpp)
 add_dependencies(rover_pos_controller prometheus_control_gencpp) 
 target_link_libraries(rover_pos_controller ${catkin_LIBRARIES})
 
@@ -78,41 +78,48 @@ add_executable(px4_pos_controller src/px4_pos_controller.cpp)
 add_dependencies(px4_pos_controller prometheus_control_gencpp) 
 target_link_libraries(px4_pos_controller ${catkin_LIBRARIES})
 
+##px4_geometry_controller.cpp
+add_executable(px4_geometry_controller src/px4_geometry_controller.cpp)
+add_dependencies(px4_geometry_controller prometheus_control_gencpp) 
+target_link_libraries(px4_geometry_controller ${catkin_LIBRARIES})
+
 ##px4_pos_estimator.cpp
 add_executable(px4_pos_estimator src/px4_pos_estimator.cpp)
 add_dependencies(px4_pos_estimator prometheus_control_gencpp)
 target_link_libraries(px4_pos_estimator ${catkin_LIBRARIES})
 target_link_libraries(px4_pos_estimator OptiTrackFeedbackRigidBody)
 
-##
-add_executable(formation_control src/formation_control.cpp)
-add_dependencies(formation_control prometheus_control_gencpp)
-target_link_libraries(formation_control ${catkin_LIBRARIES})
+##ros_info_color_test.cpp
+add_executable(ros_info_color_test src/Utilities/ros_info_color_test.cpp)
+add_dependencies(ros_info_color_test prometheus_control_gencpp)
+target_link_libraries(ros_info_color_test ${catkin_LIBRARIES})
 
-##ground_station.cpp
-add_executable(ground_station src/ground_station.cpp)
-add_dependencies(ground_station prometheus_control_gencpp)
-target_link_libraries(ground_station ${catkin_LIBRARIES})
+# add_executable(planner_server src/Test/planner_server.cpp)
+# add_dependencies(planner_server prometheus_control_gencpp)
+# target_link_libraries(planner_server ${catkin_LIBRARIES})
 
-##ground_station_msg.cpp
-add_executable(ground_station_msg src/ground_station_msg.cpp)
-add_dependencies(ground_station_msg prometheus_control_gencpp)
-target_link_libraries(ground_station_msg ${catkin_LIBRARIES})
 
 ###### Test File ##########
 #add_executable(px4_fw_controller src/Test/px4_fw_controller.cpp)
 #add_dependencies(px4_fw_controller prometheus_control_gencpp)
 #target_link_libraries(px4_fw_controller ${catkin_LIBRARIES})
 
-add_executable(px4_sender src/Test/px4_sender.cpp)
+add_executable(px4_sender src/px4_sender.cpp)
 add_dependencies(px4_sender prometheus_control_gencpp)
 target_link_libraries(px4_sender ${catkin_LIBRARIES})
 
+
 ###### Utilities File ##########
-add_executable(keyboard_control src/Utilities/keyboard_control.cpp)
-add_dependencies(keyboard_control prometheus_control_gencpp)
-target_link_libraries(keyboard_control ${catkin_LIBRARIES})
-target_link_libraries(keyboard_control KeyboardEvent)
+#add_executable(keyboard_control src/Utilities/keyboard_control.cpp)
+#add_dependencies(keyboard_control prometheus_control_gencpp)
+#target_link_libraries(keyboard_control ${catkin_LIBRARIES})
+#target_link_libraries(keyboard_control KeyboardEvent)
+
+##px4_pos_estimator_with_noise.cpp
+add_executable(px4_pos_estimator_with_noise src//Utilities/px4_pos_estimator_with_noise.cpp)
+add_dependencies(px4_pos_estimator_with_noise prometheus_control_gencpp)
+target_link_libraries(px4_pos_estimator_with_noise ${catkin_LIBRARIES})
+target_link_libraries(px4_pos_estimator_with_noise OptiTrackFeedbackRigidBody)
 
 add_executable(filter_tester src/Utilities/filter_tester.cpp)
 add_dependencies(filter_tester prometheus_control_gencpp)
@@ -129,6 +136,7 @@ target_link_libraries(fake_vicon ${catkin_LIBRARIES})
 add_executable(terminal_control src/Utilities/terminal_control.cpp)
 add_dependencies(terminal_control prometheus_control_gencpp)
 target_link_libraries(terminal_control ${catkin_LIBRARIES})
+target_link_libraries(terminal_control KeyboardEvent)
 
 add_executable(terminal_control_rover src/Utilities/terminal_control_rover.cpp)
 add_dependencies(terminal_control_rover prometheus_control_gencpp)

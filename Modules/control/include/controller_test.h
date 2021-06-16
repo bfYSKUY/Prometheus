@@ -58,6 +58,8 @@ class Controller_Test
 
         prometheus_msgs::PositionReference Step_trajectory_generation(float time_from_start);
 
+        prometheus_msgs::PositionReference Line_trajectory_generation(float time_from_start);
+
     private:
 
         ros::NodeHandle Controller_Test_nh;
@@ -130,6 +132,56 @@ prometheus_msgs::PositionReference Controller_Test::Circle_trajectory_generation
 
     return Circle_trajectory;
 }
+
+prometheus_msgs::PositionReference Controller_Test::Line_trajectory_generation(float time_from_start)
+{
+    prometheus_msgs::PositionReference Line_trajectory;
+    float omega;
+    if( circle_radius != 0)
+    {
+        omega = direction * fabs(linear_vel / circle_radius);
+    }else
+    {
+        omega = 0.0;
+    }
+    const float angle = time_from_start * omega;
+    const float cos_angle = cos(angle);
+    const float sin_angle = sin(angle);
+
+
+    Line_trajectory.header.stamp = ros::Time::now();
+
+    Line_trajectory.time_from_start = time_from_start;
+
+    Line_trajectory.Move_mode = prometheus_msgs::PositionReference::TRAJECTORY;
+
+    Line_trajectory.position_ref[0] = 0.0;
+    Line_trajectory.position_ref[1] = circle_radius * sin_angle + circle_center[1];
+    Line_trajectory.position_ref[2] = circle_center[2];
+
+    Line_trajectory.velocity_ref[0] = 0.0;
+    Line_trajectory.velocity_ref[1] = circle_radius * omega * cos_angle;
+    Line_trajectory.velocity_ref[2] = 0;
+
+    Line_trajectory.acceleration_ref[0] = 0.0;
+    Line_trajectory.acceleration_ref[1] = - circle_radius * pow(omega, 2.0) * sin_angle;
+    Line_trajectory.acceleration_ref[2] = 0;
+
+    // Line_trajectory.jerk_ref[0] = circle_radius * pow(omega, 3.0) * sin_angle;
+    // Line_trajectory.jerk_ref[1] = - circle_radius * pow(omega, 3.0) * cos_angle;
+    // Line_trajectory.jerk_ref[2] = 0;
+
+    // Line_trajectory.snap_ref[0] = circle_radius * pow(omega, 4.0) * cos_angle;
+    // Line_trajectory.snap_ref[1] = circle_radius * pow(omega, 4.0) * sin_angle;
+    // Line_trajectory.snap_ref[2] = 0;
+
+    Line_trajectory.yaw_ref = 0;
+    // Line_trajectory.yaw_rate_ref = 0;
+    // Line_trajectory.yaw_acceleration_ref = 0;
+
+    return Line_trajectory;
+}
+
 
 prometheus_msgs::PositionReference Controller_Test::Eight_trajectory_generation(float time_from_start)
 {
@@ -221,22 +273,17 @@ prometheus_msgs::PositionReference Controller_Test::Step_trajectory_generation(f
 // 【打印参数函数】
 void Controller_Test::printf_param()
 {
-    cout <<">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Controller_Test Parameter <<<<<<<<<<<<<<<<<<<<<<<<<<<" <<endl;
+    cout <<">>>>>>>>>>>>>>>>>>>>>>>>>Controller_Test Parameter <<<<<<<<<<<<<<<<<<<<<<" <<endl;
     cout <<"Circle Shape:  " <<endl;
-    cout <<"circle_center :  "<<endl << circle_center <<endl;
-    cout <<"circle_radius :  "<< circle_radius << endl;
-    cout <<"linear_vel : "<< linear_vel << endl;
-    cout <<"direction : "<< direction << endl;
-
+    cout <<"circle_center :  " << circle_center[0] <<" [m] "<< circle_center[1] <<" [m] "<< circle_center[2] <<" [m] "<<endl;
+    cout <<"circle_radius :  "<< circle_radius <<" [m] " <<"linear_vel : "<< linear_vel <<" [m/s] "<<"direction : "<< direction << endl;
 
     cout <<"Eight Shape:  " <<endl;
-    cout <<"eight_origin_ :  "<<endl << eight_origin_ <<endl;
-    cout <<"eight_omega_ :  "<< eight_omega_ << endl;
-    cout <<"radial : "<< radial << endl;
+    cout <<"eight_origin_ :  "<< eight_origin_[0] <<" [m] "<< eight_origin_[1] <<" [m] "<< eight_origin_[2] <<" [m] "<<endl;
+    cout <<"eight_omega_ :  "<< eight_omega_  <<" [rad/s] " << "radial : "<< radial << endl;
 
     cout <<"Step:  " <<endl;
-    cout <<"step_length :  "<< step_length << endl;
-    cout <<"step_interval : "<< step_interval << endl;
+    cout <<"step_length :  "<< step_length << " [m] step_interval : "<< step_interval << " [s] "<<endl;
 }
 
 
